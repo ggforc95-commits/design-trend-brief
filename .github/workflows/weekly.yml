@@ -1,0 +1,48 @@
+name: Design trend brief
+on:
+  schedule:
+    # UTC 01:00 Monday = Asia/Shanghai 09:00 Monday; GitHub may delay.
+    - cron: '0 1 * * 1'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '先选 test 验证群推送，再选 brief 生成完整简报'
+        type: choice
+        options:
+          - test
+          - brief
+          - preview
+        default: test
+permissions:
+  contents: read
+concurrency:
+  group: design-trend-brief
+  cancel-in-progress: false
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate and deliver
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          WECOM_WEBHOOK_URL: ${{ secrets.WECOM_WEBHOOK_URL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          RUN_MODE: ${{ inputs.mode }}
+        run: |
+          case "$RUN_MODE" in
+            test) python send_brief.py --test-message ;;
+            preview) python send_brief.py --dry-run ;;
+            *) python send_brief.py ;;
+          esac
+      - name: Save generated brief
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: design-brief-${{ github.run_id }}
+          path: output/brief.txt
+          retention-days: 30
